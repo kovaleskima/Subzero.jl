@@ -4,9 +4,6 @@
 # buidling a discrete-element model (DEM) with Subzero.jl as well as running and plotting your
 # simulatuion.
 
-
-# ## Tutorial - copy-pasteable version
-
 # ## Core ideas behind Subzero.jl simulations
 
 
@@ -213,3 +210,10 @@ atmos = Atmos(; grid, u = 5.0, v = 0.0, temp = 0.0)
 
 # Again since all of the fields are constant, we won't plot them, but you can, using the `heatmap`
 # function as shown above. 
+
+# ## Creating the rest of the model and simulation...
+
+# !!! note
+#       The documentation, and to some extent the source code, is being cleaned up. This means that right now, some of the documentation is here,
+#       and some is on the (documentation.md)[https://github.com/Caltech-OCTO/Subzero.jl/blob/main/documentation.md] section of the GitHub. Once
+#       you have reached this part of the tutorial, please switch back over there.

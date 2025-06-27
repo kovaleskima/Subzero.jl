@@ -2,8 +2,7 @@
 
 You have a lot of flexibility in designing a simulation within Subzero. First, you need to create all the pieces of your model, including the grid, the ocean, the atmosphere, the domain, and the floes. After than, you can use your model to create a simulation, where you will also specify physical constants and other runtime parameters.
 
-!!! note
-      The documentation, and to some extent the source code, is being cleaned up. This means that right now, some of the documentation is here, and some is in the [tutorial](https://caltech-octo.github.io/Subzero.jl/dev/tutorial/) and [API](https://caltech-octo.github.io/Subzero.jl/dev/api/) sections of the documentation website.
+**The documentation, and to some extent the source code, is being cleaned up. This means that right now, some of the documentation is here, and some is in the [tutorial](https://caltech-octo.github.io/Subzero.jl/dev/tutorial/) and [API](https://caltech-octo.github.io/Subzero.jl/dev/api/) sections of the documentation website. Start with the tutorial and API sections and then come back here.**
 
 ## Contents
 * [Building a Model](#building-a-model)

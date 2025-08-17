@@ -47,20 +47,12 @@ ocean = Ocean(;
 atmos = Atmos(FT; grid, u = 0.0, v = 0.0, temp = 0.0)
 
 # ## Create Floes
+floe_generator = VoronoiTesselationFieldGenerator(; nfloes, concentrations = [concentration], hmean, Δh = 0)
 floe_settings = FloeSettings(subfloe_point_generator = SubGridPointsGenerator(grid, 2))
-floe_arr = initialize_floe_field(
-    FT,
-    nfloes,
-    [concentration],
-    domain,
-    hmean,
-    0;
-    rng = Xoshiro(1),
-    floe_settings = floe_settings
-)
+floe_arr = initialize_floe_field(FT; generator = floe_generator,  domain, rng = Xoshiro(1), floe_settings)
 
 # ## Create Model
-model = Model(grid, ocean, atmos, domain, floe_arr)
+model = Model(;grid, ocean, atmos, domain, floes = floe_arr)
 
 # ## Create Outout Writers
 initwriter = InitialStateOutputWriter(dir = dirs[1], overwrite = true)

@@ -27,20 +27,20 @@
     @test interactions[overlap] == 7
 
     # Test with coords inputs
-    floe_from_coords = Floe(floe_coords[1], hmean, Δh; u = 0.2, rng = rng)
+    floe_from_coords = Floe(floe_coords[1], hmean; u = 0.2, rng = rng)
     @test typeof(floe_from_coords) <: Floe
     @test floe_from_coords.u == 0.2
-    @test 0.49 <= floe_from_coords.height <= 0.51
+    @test floe_from_coords.height == 0.5
     @test floe_from_coords.centroid == collect(centroid1)
     @test floe_from_coords.area == area1
     @test floe_from_coords.status.tag == Subzero.active
     
     # Test with polygon input
-    floe_from_poly = Floe(poly1, hmean, Δh; v = -0.2, rng = Xoshiro(1))
+    floe_from_poly = Floe(poly1, hmean; v = -0.2, rng = Xoshiro(1))
     @test typeof(floe_from_poly) <: Floe
     @test floe_from_poly.u == 0.0
     @test floe_from_poly.v == -0.2
-    @test 0.49 <= floe_from_poly.height <= 0.51
+    @test floe_from_poly.height == 0.5
     @test floe_from_poly.centroid == collect(centroid1)
     @test floe_from_poly.area == area1
     @test floe_from_poly.status.tag == Subzero.active
@@ -57,16 +57,16 @@
     rmax_cpoly = 2sqrt(5^2 + 5^2)
     # Test polygon with no holes
     floe_arr = StructArray{Floe{FT}}(undef, 0)
-    n_new = Subzero.poly_to_floes!(FT, floe_arr, rect_poly, hmean, Δh, rmax_rect)
+    n_new = Subzero._poly_to_floes!(FT, floe_arr, rect_poly, hmean, Δh, rmax_rect)
     @test n_new == 1 && length(floe_arr) == 1
     @test !Subzero.hashole(floe_arr.coords[1])
 
     # Test with polygon below minimum floe area
-    n_new = Subzero.poly_to_floes!(FT, floe_arr, rect_poly, hmean, Δh, rmax_rect; floe_settings = fs_small_min_area)
+    n_new = Subzero._poly_to_floes!(FT, floe_arr, rect_poly, hmean, Δh, rmax_rect; floe_settings = fs_small_min_area)
     @test n_new == 0 && length(floe_arr) == 1
 
     # Test with polygon with a hole that is split into 3 polyons
-    n_new = Subzero.poly_to_floes!(FT, floe_arr, c_hole_poly, hmean, Δh, rmax_cpoly)
+    n_new = Subzero._poly_to_floes!(FT, floe_arr, c_hole_poly, hmean, Δh, rmax_cpoly)
     @test n_new == 3 && length(floe_arr) == 4
     @test !any(Subzero.hashole.(floe_arr.coords))
 
@@ -133,10 +133,10 @@
     @test typeof(floe_arr) <: StructArray{<:Floe}
     @test all([sum(GO.area, Subzero.intersect_polys(Subzero.make_polygon(c), topo_polys); init = 0.0) for c in floe_arr.coords] .< 1e-6)
     
-    # Test generate_voronoi_coords - general case
+    # Test _generate_voronoi_coords - general case
     domain_coords = [[[[1, 2], [1.5, 3.5], [1, 5], [2.5, 5], [2.5, 2], [1, 2]]]]
     bounding_box = [[[1, 2], [1, 5], [2.5, 5], [2.5, 2], [1, 2]]]
-    voronoi_coords = Subzero.generate_voronoi_coords(
+    voronoi_coords = Subzero._generate_voronoi_coords(
         10,
         [1.5, 3],
         [1, 2],
@@ -159,7 +159,7 @@
     # Test warning and no points generated
     warning_str = "Only 0 floes were able to be generated in 10 tries during \
         voronoi tesselation."
-    @test @test_logs (:warn, warning_str) Subzero.generate_voronoi_coords(
+    @test @test_logs (:warn, warning_str) Subzero._generate_voronoi_coords(
         0, # Don't generate any points
         [1.5, 3],
         [1, 2],

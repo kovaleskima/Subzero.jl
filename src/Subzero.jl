@@ -8,9 +8,7 @@ module Subzero
 end Subzero
 
 export
-    Floe,
     Constants,
-    Model,
     Simulation,
     timestep_sim!,
     run!,
@@ -22,16 +20,6 @@ export
     GridOutput,
     FloeOutput,
     add_ghosts!,
-    # Interaction field enum and elements
-    InteractionFields,
-    floeidx,
-    xforce,
-    yforce,
-    xpoint,
-    ypoint,
-    torque,
-    overlap, 
-    initialize_floe_field,
     NoFracture,
     HiblerYieldCurve,
     MohrsCone,
@@ -81,7 +69,8 @@ const RingVec{T} = R where {
     R <: AbstractArray{V},
 }
 
-const Polys{T, V} = GI.Polygon{false, false, Vector{GI.LinearRing{false, false, Vector{Tuple{T, T}}, Nothing, Nothing}}, Nothing, Nothing} where T
+const Polys{T} = GI.Polygon{false, false, Vector{GI.LinearRing{false, false, Vector{Tuple{T, T}}, Nothing, Nothing}}, Nothing, Nothing} where T
+const MultiPolys{T} = GI.MultiPolygon{false, false, Vector{Polys{T}}, Nothing, Nothing} where T
 
 Base.convert(::Type{Polys{Float32}}, p::Polys{<:Real}) = GO.tuples(p, Float32)
 Base.convert(::Type{Polys{Float64}}, p::Polys{<:Real}) = GO.tuples(p, Float64)
@@ -107,7 +96,10 @@ include("simulation_components/domain_components/abstract_domains.jl")
 include("simulation_components/domain_components/boundaries.jl")
 include("simulation_components/domain_components/topography.jl")
 include("simulation_components/domain_components/domains.jl")
-include("simulation_components/floe.jl")
+include("simulation_components/floe_components/floe_status.jl")
+include("simulation_components/floe_components/floe_interaction.jl")
+include("simulation_components/floe_components/floe.jl")
+include("simulation_components/floe_components/floe_field.jl")
 include("floe_utils.jl")
 include("simulation_components/oceans.jl")
 include("simulation_components/atmos.jl")

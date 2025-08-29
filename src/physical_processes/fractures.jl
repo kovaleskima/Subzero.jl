@@ -269,7 +269,7 @@ end
 
 #### MADDY CODE HERE ####
 """
-    determine_fractures(::BondedFractures
+    determine_fractures(::BondFractures
         floes,
         criteria,
         min_floe_area,
@@ -288,9 +288,8 @@ function determine_fractures(criteria::BondFractures,
     floes,
     floe_settings 
 )
-    # Determine if floe stresses are in or out of criteria allowable regions
-    update_criteria!(criteria, floes)
     # If stresses are outside of criteria regions, we will fracture the floe
+    # change this so that it queries whether bond stresses are outside allowable region
     frac_idx = [!GO.coveredby(find_σpoint(get_floe(floes, i), floe_settings), criteria.poly) for i in eachindex(floes)]
     frac_idx[floes.area .< floe_settings.min_floe_area] .= false
     return range(1, length(floes))[frac_idx]

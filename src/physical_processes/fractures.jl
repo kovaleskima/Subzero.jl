@@ -221,6 +221,14 @@ Calculate Mohr's Cone vertices given _calculate_mohrs arguments.
 MohrsCone{FT}(args...) where FT = MohrsCone{FT}(_calculate_mohrs(FT, args...))
 
 """
+    BondFractures<:AbstractFractureCriteria
+
+Simple AbstractFractureCriteria type representing when fracturing functionality
+is determined by bonds as defined in (paper here).
+"""
+struct BondFractures<:AbstractFractureCriteria end
+
+"""
     update_criteria!(criteria::HiblerYieldCurve, floes)
 
 Update the Hibler Yield Curve vertices based on the current set of floes. The
@@ -249,6 +257,45 @@ Mohr's cone is not time or floe dependent so it doesn't need to be updates.
 function update_criteria!(::MohrsCone, floes)
     return
 end
+
+"""
+    update_criteria!(::BondFractures, floes)
+
+For the time being, BondFractures are not time or floe dependent so it doesn't need to be updates.
+"""
+function update_criteria!(::BondFractures, floes)
+    return
+end
+
+#### MADDY CODE HERE ####
+"""
+    determine_fractures(::BondedFractures
+        floes,
+        criteria,
+        min_floe_area,
+    )
+
+Determines which floes will fracture depending on the principal stress criteria.
+Inputs:
+    floes           <StructArray{Floe}> model's list of floes
+    criteria        <AbstractFractureCriteria> fracture criteria
+    floe_settings   <FloeSettings> Floe settings. Contains Floe properties and stress 
+                    calculator.
+Outputs:
+    <Vector{Int}> list of indices of floes to fracture 
+"""
+function determine_fractures(criteria::BondFractures,
+    floes,
+    floe_settings 
+)
+    # Determine if floe stresses are in or out of criteria allowable regions
+    update_criteria!(criteria, floes)
+    # If stresses are outside of criteria regions, we will fracture the floe
+    frac_idx = [!GO.coveredby(find_σpoint(get_floe(floes, i), floe_settings), criteria.poly) for i in eachindex(floes)]
+    frac_idx[floes.area .< floe_settings.min_floe_area] .= false
+    return range(1, length(floes))[frac_idx]
+end
+#### END MADDY CODE ####
 
 """
     determine_fractures(

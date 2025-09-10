@@ -31,6 +31,9 @@ export Floe
     parent_ids::Vector{Int} = Vector{Int}()  # if the floe was originally part
                             # of one or several floes, list parent ids
     ghosts::Vector{Int} = Vector{Int}()  # indices of ghost floes of given floe
+    
+    neighbor_ids::Vector{Int} = Vector{Int}() # indices of neighboring floes of
+                            # given floe
     # Forces/Collisions ----------------------------------------------------
     fxOA::FT = 0.0          # force from ocean and atmos in x direction
     fyOA::FT = 0.0          # force from ocean and atmos in y direction

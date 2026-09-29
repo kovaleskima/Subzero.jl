@@ -1,7 +1,8 @@
-# test/test_bonds.jl
-using Test, Subzero
+# test/test_bond_force.jl
+using Test
 using StaticArrays
 using Random
+using Subzero: bond_force, rot, cross2
 
 const k, L = 2.5e3, 40.0      # arbitrary but nonzero, so scaling errors show up
 

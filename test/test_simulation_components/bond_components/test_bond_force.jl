@@ -5,6 +5,7 @@ using Random
 using Subzero: bond_force, rot, cross2
 
 const k, L = 2.5e3, 40.0      # arbitrary but nonzero, so scaling errors show up
+const kL = k * L
 
 @testset "bond_force" begin
 
@@ -15,9 +16,9 @@ const k, L = 2.5e3, 40.0      # arbitrary but nonzero, so scaling errors show up
 
     @testset "unstretched bond gives zero force and torque" begin
         F, τi, τj = bond_force(xi, αi, ri, xj, αj, rj, k, L)
-        @test F ≈ SVector(0.0, 0.0) atol = 1e-12
-        @test τi ≈ 0 atol = 1e-12
-        @test τj ≈ 0 atol = 1e-12
+        @test F ≈ SVector(0.0, 0.0) atol = 1e-12 * kL
+        @test τi ≈ 0 atol = 1e-12 * kL
+        @test τj ≈ 0 atol = 1e-12 * kL
     end
 
     @testset "translating floe j pulls floe i toward it, equal and opposite" begin
@@ -38,7 +39,7 @@ const k, L = 2.5e3, 40.0      # arbitrary but nonzero, so scaling errors show up
 
         # unstretched stays unstretched
         F, _, _ = bond_force(xi′, αi′, ri, xj′, αj′, rj, k, L)
-        @test F ≈ SVector(0.0, 0.0) atol = 1e-10
+        @test F ≈ SVector(0.0, 0.0) atol = 1e-10 * kL
 
         # stretched: the force rotates covariantly with the frame
         δ = SVector(0.3, 0.1)

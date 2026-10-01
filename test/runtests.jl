@@ -14,6 +14,8 @@ using Test
     include("test_simulation_components/oceans.jl")
     include("test_simulation_components/atmos.jl")
     include("test_simulation_components/floe_components/floe.jl")
+    include("test_simulation_components/bond_components/test_bond_force.jl")
+    include("test_simulation_components/bond_components/test_bonds.jl")
     include("test_physical_processes/test_update_floe.jl")
     include("test_physical_processes/test_collisions.jl")
     include("test_physical_processes/test_coupling.jl")

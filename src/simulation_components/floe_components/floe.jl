@@ -47,6 +47,7 @@ const FLOE_DEF = "`floe::Floe`: singular floe within the simulation"
     stress_instant::Matrix{FT} = zeros(2, 2)
     strain::Matrix{FT} = zeros(2, 2)
     damage::FT = 0.0        # damage to the floe (to be used in new stress calculator)
+    bonds::FloeBonds{FT} = FloeBonds{FT}() # bond attribute for bond force accumulation
     # Previous values for timestepping  -------------------------------------
     p_dxdt::FT = 0.0        # previous timestep x-velocity
     p_dydt::FT = 0.0        # previous timestep y-velocity

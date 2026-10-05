@@ -1,16 +1,23 @@
 # add BondSet struct, constructors, and alive flag
-
-struct BondSet{FT<:AbstractFloat}
-    i::Vector{Int}                    # stable floe IDs
-    j::Vector{Int}
-    ri::Vector{SA.SVector{2,FT}}         # bond center, floe i body frame
-    rj::Vector{SA.SVector{2,FT}}
-    L::Vector{FT}                     # shared face length
-    alive::Vector{Bool}
+# the bond as seen from one of its two floes
+struct FloeBond{FT<:AbstractFloat}
+    partner_id::Int                  # stable `id` of the bonded floe
+    r_self::SA.SVector{2,FT}         # bond center in THIS floe's body frame
+    r_partner::SA.SVector{2,FT}      # same bond center in the partner's body frame
+    L::FT                            # shared face length
 end
 
-Base.@kwdef struct BondParameters{FT<:AbstractFloat}
-    stiffness_ratio::FT = 25     # k_bond = k_series / stiffness_ratio (MATLAB's "/25")
-    damping_ratio::FT   = 0.1    # ζ, fraction of critical damping (arbitrary for now)
-    coastline_bonds::Bool = false
+# bond to the coast: fixed anchor, no partner floe
+struct CoastBond{FT<:AbstractFloat}
+    r_self::SA.SVector{2,FT}
+    anchor::SA.SVector{2,FT}         # fixed world position
+    L::FT
 end
+
+Base.@kwdef struct FloeBonds{FT<:AbstractFloat}
+    floe::Vector{FloeBond{FT}} = FloeBond{FT}[]
+    coast::Vector{CoastBond{FT}} = CoastBond{FT}[]
+end
+
+Base.isempty(b::FloeBonds) = isempty(b.floe) && isempty(b.coast)
+nbonds(b::FloeBonds) = length(b.floe) + length(b.coast)

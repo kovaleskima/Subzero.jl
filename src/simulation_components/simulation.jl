@@ -68,6 +68,7 @@ Only keyword arguments are used!
     simp_settings::SimplificationSettings{FT} = SimplificationSettings()
     ridgeraft_settings::RidgeRaftSettings{FT} = RidgeRaftSettings()
     weld_settings::WeldSettings{FT} = WeldSettings()
+    bond_settings::BondSettings{FT} = BondSettings()
     # Output Writers -----------------------------------------------------------
     writers::OT = OutputWriters()
 end
@@ -144,7 +145,12 @@ function timestep_sim!(sim, tstep, start_tstep = 0)
 
         # Add new pieces to the end of floe list
         append!(sim.model.floes, pieces_buffer)
-
+        # Bonds (floe list has no ghosts at this point)
+        if sim.bond_settings.bonds_on
+            prune_dangling_bonds!(sim.model.floes)
+            timestep_bonds!(sim.model.floes, sim.model.domain, sim.consts,
+                            sim.bond_settings, sim.Δt)
+        end
         # Physical processes without ghost floes
         # Effects of ocean and atmosphere on ice and visa versa
         if (
@@ -328,6 +334,7 @@ function restart!(initial_state_fn, checkpointer_fn, new_nΔt, new_output_writer
         simp_settings = is["sim"].simp_settings,
         ridgeraft_settings = is["sim"].ridgeraft_settings,
         weld_settings = is["sim"].weld_settings,
+        bond_settings = hasproperty(is["sim"], :bond_settings) ? is["sim"].bond_settings : BondSettings()
     )
     run!(new_simulation; start_tstep = start_tstep)
     return

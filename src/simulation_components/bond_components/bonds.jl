@@ -17,6 +17,9 @@ end
 Base.@kwdef struct FloeBonds{FT<:AbstractFloat}
     floe::Vector{FloeBond{FT}} = FloeBond{FT}[]
     coast::Vector{CoastBond{FT}} = CoastBond{FT}[]
+    fx::FT = zero(FT)
+    fy::FT = zero(FT)
+    trq::FT = zero(FT)
 end
 
 Base.isempty(b::FloeBonds) = isempty(b.floe) && isempty(b.coast)

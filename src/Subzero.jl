@@ -60,6 +60,7 @@ include("simulation_components/output_components/logger.jl")
 # Process Settings
 include("simulation_components/process_settings/process_settings.jl")
 include("simulation_components/process_settings/fracture_settings.jl")
+include("simulation_components/process_settings/bond_settings.jl")
 # Simulation
 include("simulation_components/output_components/output.jl")
 include("simulation_components/constants.jl")

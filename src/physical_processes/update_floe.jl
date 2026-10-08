@@ -441,7 +441,7 @@ function timestep_floe_properties!(
         # Update stress
         calc_stress!(get_floe(floes, i), floe_settings)
 
-        # Ensure no extreem values due to model instability
+        # Ensure no extreme values due to model instability
         if floes.height[i] > floe_settings.max_floe_height
             @info "Reducing height to $(floe_settings.max_floe_height) m" tstep = tstep
             floes.height[i] = floe_settings.max_floe_height
@@ -453,6 +453,13 @@ function timestep_floe_properties!(
             ctrq = ctrq ./ 10
         end
         
+        # update bond associated forces outside the cforce limiter loop to avoid silent weakening of bonds
+        bonds = floes.bonds[i]
+        dudt = (floes.fxOA[i] + cforce[1] + bonds.fx)/floes.mass[i]
+        dvdt = (floes.fyOA[i] + cforce[2] + bonds.fy)/floes.mass[i]
+        ...
+        dξdt = (floes.trqOA[i] + ctrq + bonds.trq)/floes.moment[i]
+
         # Update floe based on thermodynamic growth
         h = floes.height[i]
         Δh = floes.hflx_factor[i] / h

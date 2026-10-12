@@ -14,7 +14,7 @@ struct CoastBond{FT<:AbstractFloat}
     L::FT
 end
 
-Base.@kwdef struct FloeBonds{FT<:AbstractFloat}
+Base.@kwdef mutable struct FloeBonds{FT<:AbstractFloat}
     floe::Vector{FloeBond{FT}} = FloeBond{FT}[]
     coast::Vector{CoastBond{FT}} = CoastBond{FT}[]
     fx::FT = zero(FT)

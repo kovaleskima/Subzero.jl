@@ -452,13 +452,6 @@ function timestep_floe_properties!(
             cforce = cforce ./ 10
             ctrq = ctrq ./ 10
         end
-        
-        # update bond associated forces outside the cforce limiter loop to avoid silent weakening of bonds
-        bonds = floes.bonds[i]
-        dudt = (floes.fxOA[i] + cforce[1] + bonds.fx)/floes.mass[i]
-        dvdt = (floes.fyOA[i] + cforce[2] + bonds.fy)/floes.mass[i]
-        ...
-        dξdt = (floes.trqOA[i] + ctrq + bonds.trq)/floes.moment[i]
 
         # Update floe based on thermodynamic growth
         h = floes.height[i]
@@ -481,8 +474,9 @@ function timestep_floe_properties!(
         floes.p_dαdt[i] = floes.ξ[i]
 
         # Update ice velocities with forces and torques
-        dudt = (floes.fxOA[i] + cforce[1])/floes.mass[i]
-        dvdt = (floes.fyOA[i] + cforce[2])/floes.mass[i]
+        bonds = floes.bonds[i]
+        dudt = (floes.fxOA[i] + cforce[1] + bonds.fx)/floes.mass[i]
+        dvdt = (floes.fyOA[i] + cforce[2] + bonds.fy)/floes.mass[i]
         frac = if abs(Δt*dudt) > (h/2) && abs(Δt*dvdt) > (h/2)
             frac1 = (sign(dudt)*h/2Δt)/dudt
             frac2 = (sign(dvdt)*h/2Δt)/dvdt
@@ -504,7 +498,7 @@ function timestep_floe_properties!(
         floes.p_dudt[i] = dudt
         floes.p_dvdt[i] = dvdt
 
-        dξdt = (floes.trqOA[i] + ctrq)/floes.moment[i]
+        dξdt = (floes.trqOA[i] + ctrq + bonds.trq)/floes.moment[i]
         dξdt = frac*dξdt
         ξ = floes.ξ[i] + 1.5Δt*dξdt-0.5Δt*floes.p_dξdt[i]
         if abs(ξ) > floe_settings.maximum_ξ

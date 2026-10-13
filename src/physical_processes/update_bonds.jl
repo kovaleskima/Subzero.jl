@@ -16,12 +16,12 @@ function timestep_bonds!(floes::StructArray{<:Floe{FT}}, domain, consts, bs, Δt
             ih, jh = floes.height[i], floes.height[j]
             ir, jr = sqrt(floes.area[i]), sqrt(floes.area[j])
             k = consts.E * (ih*jh) / (ih*jr + jh*ir) / bs.stiffness_ratio
-            F, τ, _ = bond_force(xi, floes.α[i], b.r_self, xj, floes.α[j], b.r_partner, k, b.L)
+            F, τ, _ = bond_force(xi, floes.α[i], b.attach_self, xj, floes.α[j], b.r_partner, k, b.L)
             mi, mj = floes.mass[i], floes.mass[j]
             c = 2 * bs.damping_ratio * sqrt(k * b.L * mi*mj/(mi + mj))
-            Fd = bond_damping_force(floes.α[i], b.r_self, Ui, floes.ξ[i],
-                                    floes.α[j], b.r_partner, Uj, floes.ξ[j], c)
-            τd = cross2(rot(floes.α[i], b.r_self), Fd)
+            Fd = bond_damping_force(floes.α[i], b.attach_self, Ui, floes.ξ[i],
+                                    floes.α[j], b.attach_partner, Uj, floes.ξ[j], c)
+            τd = cross2(rot(floes.α[i], b.attach_self), Fd)
             bonds.fx  += F[1] + Fd[1]
             bonds.fy  += F[2] + Fd[2]
             bonds.trq += τ + τd

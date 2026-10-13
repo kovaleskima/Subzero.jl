@@ -3,13 +3,14 @@
 
 _centroid(f::Floe{FT}) where {FT} = SA.SVector{2,FT}(f.centroid[1], f.centroid[2])
 
-function add_bond!(fi::Floe{FT}, fj::Floe{FT}, p::SA.SVector{2,FT}, L::FT) where {FT}
+function add_bond!(fi::Floe{FT}, fj::Floe{FT}, p, n, L) where {FT}
+    # p: world-frame point on the shared face; n: unit normal pointing from fi toward fj
     any(b -> b.partner_id == fj.id, fi.bonds.floe) &&
         throw(ArgumentError("floes $(fi.id) and $(fj.id) are already bonded"))
-    ri = rot(-fi.α, p - _centroid(fi))
-    rj = rot(-fj.α, p - _centroid(fj))
-    push!(fi.bonds.floe, FloeBond{FT}(fj.id, ri, rj, L))
-    push!(fj.bonds.floe, FloeBond{FT}(fi.id, rj, ri, L))
+    ai = rot(-fi.α, p - _centroid(fi));  aj = rot(-fj.α, p - _centroid(fj))
+    ni = rot(-fi.α, n);                  nj = rot(-fj.α, -n)
+    push!(fi.bonds.floe, FloeBond{FT}(fj.id, ai, aj, ni, L))
+    push!(fj.bonds.floe, FloeBond{FT}(fi.id, aj, ai, nj, L))
     return nothing
 end
 
@@ -28,7 +29,7 @@ function bonds_symmetric(floes)
         m = findall(x -> x.partner_id == f.id, p.bonds.floe)
         length(m) == 1 || return false
         mb = p.bonds.floe[only(m)]
-        (mb.r_self == b.r_partner && mb.r_partner == b.r_self && mb.L == b.L) || return false
+        (mb.attach_self == b.attach_partner && mb.attach_partner == b.attach_self && mb.L == b.L) || return false
     end
     return true
 end

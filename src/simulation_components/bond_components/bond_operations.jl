@@ -14,6 +14,19 @@ function add_bond!(fi::Floe{FT}, fj::Floe{FT}, p, n, L) where {FT}
     return nothing
 end
 
+function add_coast_bond!(fi::Floe{FT}, p, n, L) where {FT}
+    # p: world-frame point on the face touching the coast (becomes the fixed anchor);
+    # n: unit normal pointing from fi toward the coast
+    any(b -> b.anchor ≈ p, fi.bonds.coast) &&
+        throw(ArgumentError("floe $(fi.id) is already bonded to the coast at $p"))
+    ai = rot(-fi.α, p - _centroid(fi))
+    ni = rot(-fi.α, n)
+    push!(fi.bonds.coast, CoastBond{FT}(ai, p, ni, L))
+    return nothing
+end
+
+remove_coast_bonds!(fi::Floe) = (empty!(fi.bonds.coast); nothing)
+
 function remove_bond!(fi::Floe, fj::Floe)
     filter!(b -> b.partner_id != fj.id, fi.bonds.floe)
     filter!(b -> b.partner_id != fi.id, fj.bonds.floe)

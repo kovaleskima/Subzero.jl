@@ -73,6 +73,7 @@ include("physical_processes/collisions.jl")
 include("physical_processes/simplification.jl")
 include("physical_processes/ridge_raft.jl")
 include("physical_processes/welding.jl")
+include("physical_processes/update_bonds.jl")
 # Tools
 include("tools/plotting.jl")
 include("tools/conservation_em.jl")

@@ -7,7 +7,9 @@ Settings needed for bonds between floes.
 
 ## _Fields_ / _Keyword Arguments_
 - `bonds_on::Bool`: if true, bonded floes are held together by springs (Default = false)
-- `coastline_bonds::Bool`: if true, floes touching the coast or topography at the start get bonds to it (Default = false)
+- `coastline_bonds::Bool`: if true, bonds between floes and the coast/topography (added with
+    `add_coast_bond!`) apply forces; if false, they are ignored and only floe-floe bonds act.
+    Requires `bonds_on`. (Default = false)
 - `stiffness_ratio::FT`: bond stiffness is the contact stiffness divided by this ratio (Default = 25)
 - `damping_ratio::FT`: fraction of critical damping applied to each bond (Default = 0.1)
 

@@ -205,6 +205,8 @@ function fracture_floes!(
     floe_settings,
     Δt,
 ) where {FT <: AbstractFloat}
+    # Fracturing may be on for bonds only
+    fracture_settings.criteria isa NoFracture && return max_floe_id
     # Determine which floes will fracture
     frac_idx = determine_fractures(
         floes,
@@ -268,4 +270,57 @@ function fracture_floes!(
         end
     end
     return max_floe_id
+end
+
+
+"""
+    fracture_bonds!(...)
+
+Breaks bonds whose accumulated stress falls outside of the given bond fracture criteria.
+Bond stress is recorded each timestep by `timestep_bonds!` and accumulated over the last
+`stress_nhistory` timesteps with exponentially decaying weights (see [`BondSettings`](@ref)).
+A broken floe-floe bond is removed from both floes. Coast bonds are only checked if they are
+on in the bond settings, as they carry no stress otherwise.
+
+## _Positional arguments_
+- $FLOES_DEF
+- `criteria::AbstractBondFractureCriteria`: bond fracture criteria
+- `bond_settings::BondSettings`: simulation's bond settings
+
+##  _Returns_
+- `Int`: number of bonds broken (each floe-floe bond counts once)
+"""
+fracture_bonds!(::StructArray{<:Floe}, ::NoBondFracture, _) = 0
+
+function fracture_bonds!(
+    floes::StructArray{<:Floe},
+    criteria::AbstractBondFractureCriteria,
+    bond_settings,
+)
+    idx_of = Dict{Int,Int}(floes.id[i] => i for i in eachindex(floes))
+    # broken floe-floe bonds are recorded by the floe with the smaller id and removed from
+    # both floes after the threaded loop, so no thread writes to another floe's bonds
+    broken = [Int[] for _ in eachindex(floes)]
+    ncoast_broken = zeros(Int, length(floes))
+    Threads.@threads for i in eachindex(floes)
+        bonds = floes.bonds[i]
+        isempty(bonds) && continue
+        for b in bonds.floe
+            floes.id[i] < b.partner_id || continue     # both sides record the same history
+            j = get(idx_of, b.partner_id, 0)
+            j == 0 && continue
+            σn, τ = _accumulated_bond_stress(b, bond_settings)
+            _bond_fractures(criteria, b, σn, τ) && push!(broken[i], j)
+        end
+        bond_settings.coastline_bonds || continue
+        nbefore = length(bonds.coast)
+        filter!(b -> !_bond_fractures(criteria, b, _accumulated_bond_stress(b, bond_settings)...),
+            bonds.coast)
+        ncoast_broken[i] = nbefore - length(bonds.coast)
+    end
+    for i in eachindex(floes), j in broken[i]
+        filter!(b -> b.partner_id != floes.id[j], floes.bonds[i].floe)
+        filter!(b -> b.partner_id != floes.id[i], floes.bonds[j].floe)
+    end
+    return sum(length, broken; init = 0) + sum(ncoast_broken; init = 0)
 end

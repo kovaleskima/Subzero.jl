@@ -21,6 +21,7 @@ using Test
     include("test_physical_processes/test_coupling.jl")
     include("test_physical_processes/test_process_settings.jl")
     include("test_physical_processes/test_fractures.jl")
+    include("test_physical_processes/test_bond_fractures.jl")
     include("test_physical_processes/test_simplification.jl")
     include("test_physical_processes/test_ridge_raft.jl")
     include("test_physical_processes/test_welding.jl")

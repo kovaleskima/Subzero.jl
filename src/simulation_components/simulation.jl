@@ -148,6 +148,12 @@ function timestep_sim!(sim, tstep, start_tstep = 0)
         # Bonds (floe list has no ghosts at this point)
         if sim.bond_settings.bonds_on
             prune_dangling_bonds!(sim.model.floes)
+            # Break bonds whose stress, accumulated through the previous timestep, is too
+            # large, so broken bonds don't apply forces this timestep
+            if sim.fracture_settings.fractures_on
+                fracture_bonds!(sim.model.floes, sim.fracture_settings.bond_criteria,
+                                sim.bond_settings)
+            end
             timestep_bonds!(sim.model.floes, sim.model.domain, sim.consts,
                             sim.bond_settings, sim.Δt)
         end
@@ -174,7 +180,11 @@ function timestep_sim!(sim, tstep, start_tstep = 0)
             sim.floe_settings,
         )
         # Fracture floes
-        if sim.fracture_settings.fractures_on && mod(tstep, sim.fracture_settings.Δt) == 0
+        if (
+            sim.fracture_settings.fractures_on &&
+            !(sim.fracture_settings.criteria isa NoFracture) &&
+            mod(tstep, sim.fracture_settings.Δt) == 0
+        )
             max_floe_id =
                 fracture_floes!(
                     sim.model.floes,

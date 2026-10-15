@@ -1,4 +1,5 @@
 export AbstractFractureCriteria, NoFracture, HiblerYieldCurve, MohrsCone, FractureSettings
+export AbstractBondFractureCriteria, NoBondFracture, MohrCoulomb, MohrCoulombBondCriteria
 
 """
     abstract type AbstractFractureCriteria
@@ -308,6 +309,156 @@ function Base.show(io::IO, cone::MohrsCone{FT}; digits = 5) where {FT}
 end
 
 """
+    abstract type AbstractBondFractureCriteria
+
+Abstract super type for bond fracture criteria, which determine if a bond between two floes
+(a `FloeBond`) or between a floe and the coast (a `CoastBond`) breaks given the stress it is
+carrying. Bond fracture criteria are set separately from floe fracture criteria using the
+`bond_criteria` field of [`FractureSettings`](@ref), so bonds and floes can fracture
+independently of one another.
+
+Each timestep that bonds are on, the total force (spring + damping) each bond exerts on its
+floe is split into a normal stress `σn` (along the bond's face normal, positive in tension)
+and a shear stress `τ` (along the face) by dividing by the bond's cross-sectional area (face
+length × ice thickness). Floe-floe bonds use the thinner of the two floes. These stresses are
+accumulated over recent timesteps with exponentially decaying weights, set by
+`stress_nhistory` and `stress_decay` in [`BondSettings`](@ref), and the accumulated `σn` and
+shear magnitude `τ` are what the criteria are checked against.
+
+## API
+The following method must be implemented for all subtypes:
+- `_bond_fractures(criteria::AbstractBondFractureCriteria, bond::Union{FloeBond, CoastBond}, σn, τ)`
+
+`_bond_fractures` returns `true` if the bond breaks under normal stress `σn` and shear stress
+`τ`. Dispatching on the bond type allows different criteria for floe-floe and coast bonds.
+
+See the existing concrete subtypes: [`NoBondFracture`](@ref) and [`MohrCoulombBondCriteria`](@ref).
+"""
+abstract type AbstractBondFractureCriteria end
+
+"""
+    NoBondFracture<:AbstractBondFractureCriteria
+
+Type of AbstractBondFractureCriteria representing when bond fracturing is turned off. If
+this is the `bond_criteria` provided to the simulation's `FractureSettings`, then bonds will
+never break.
+"""
+struct NoBondFracture<:AbstractBondFractureCriteria end
+
+_bond_fractures(::NoBondFracture, _, _, _) = false
+
+"""
+    MohrCoulomb{FT}
+
+A Mohr-Coulomb failure envelope with a tension cutoff, written with tension positive. A bond
+carrying normal stress `σn` and shear stress `τ` fails if
+
+    τ > cohesion - μ * σn    OR    σn > tensile_strength
+
+so compression strengthens the bond against shear and tension weakens it. Without a tension
+cutoff, the envelope's apex is at `σn = cohesion / μ`.
+
+## _Fields_
+- `cohesion::FT`: shear strength at zero normal stress, in Pa
+- `μ::FT`: coefficient of internal friction (tangent of the friction angle)
+- `tensile_strength::FT`: normal stress, in Pa, at which the bond fails in pure tension
+
+Here is how to construct a `MohrCoulomb` object:
+
+    MohrCoulomb([FT = Float64]; cohesion = 5.5e4, μ = 0.92, tensile_strength = nothing)
+
+If `tensile_strength` is `nothing`, it is set to the envelope's apex, `cohesion / μ`, so that
+there is no separate tension cutoff. The default `cohesion` and `μ` match the default
+[`MohrsCone`](@ref) (`q = 5.2`, `σc = 2.5e5`).
+
+## _Examples_
+```jldoctest
+julia> MohrCoulomb(; cohesion = 1e5, μ = 0.5, tensile_strength = 5e4)
+MohrCoulomb{Float64}
+  ⊢ cohesion: 100000.0
+  ⊢ μ: 0.5
+  ⊢ tensile_strength: 50000.0
+```
+"""
+struct MohrCoulomb{FT<:AbstractFloat}
+    cohesion::FT
+    μ::FT
+    tensile_strength::FT
+
+    function MohrCoulomb{FT}(cohesion, μ, tensile_strength) where {FT<:AbstractFloat}
+        cohesion < 0 && throw(ArgumentError("Mohr-Coulomb cohesion can't be negative."))
+        μ < 0 && throw(ArgumentError("Mohr-Coulomb friction coefficient can't be negative."))
+        tensile_strength < 0 && throw(ArgumentError("Mohr-Coulomb tensile strength can't be negative."))
+        new{FT}(cohesion, μ, tensile_strength)
+    end
+end
+
+function MohrCoulomb(::Type{FT} = Float64;
+    cohesion = 5.5e4, μ = 0.92, tensile_strength = nothing,
+) where {FT<:AbstractFloat}
+    if isnothing(tensile_strength)
+        tensile_strength = μ == 0 ? FT(Inf) : cohesion / μ
+    end
+    return MohrCoulomb{FT}(FT(cohesion), FT(μ), FT(tensile_strength))
+end
+
+# true if normal stress σn (tension positive) and shear stress τ lie outside the envelope
+_mohr_coulomb_fails(env::MohrCoulomb, σn, τ) =
+    σn > env.tensile_strength || τ > env.cohesion - env.μ * σn
+
+function Base.show(io::IO, env::MohrCoulomb{FT}) where {FT}
+    print(io, "MohrCoulomb{$FT}\n",
+        "  ⊢ cohesion: ", env.cohesion, "\n",
+        "  ⊢ μ: ", env.μ, "\n",
+        "  ⊢ tensile_strength: ", env.tensile_strength)
+end
+
+"""
+    MohrCoulombBondCriteria{FT} <: AbstractBondFractureCriteria
+
+Bond fracture criteria where each bond breaks once its normal and shear stresses fall outside
+of a [`MohrCoulomb`](@ref) envelope. Floe-floe bonds and coast bonds each have their own
+envelope, so, for example, ice can be made to hold onto the coast more or less strongly than
+it holds onto other floes.
+
+## _Fields_
+- `floe::MohrCoulomb{FT}`: envelope used for bonds between two floes
+- `coast::MohrCoulomb{FT}`: envelope used for bonds between a floe and the coast
+
+Here is how to construct a `MohrCoulombBondCriteria` object:
+
+    MohrCoulombBondCriteria([FT = Float64]; floe = MohrCoulomb(FT), coast = floe)
+
+## _Examples_
+```jldoctest
+julia> MohrCoulombBondCriteria(; coast = MohrCoulomb(; cohesion = 2e5, μ = 0.5))
+MohrCoulombBondCriteria{Float64}
+  ⊢ floe: cohesion = 55000.0, μ = 0.92, tensile_strength = 59782.60869565217
+  ⊢ coast: cohesion = 200000.0, μ = 0.5, tensile_strength = 400000.0
+```
+"""
+struct MohrCoulombBondCriteria{FT<:AbstractFloat}<:AbstractBondFractureCriteria
+    floe::MohrCoulomb{FT}
+    coast::MohrCoulomb{FT}
+end
+
+function MohrCoulombBondCriteria(::Type{FT} = Float64;
+    floe = MohrCoulomb(FT), coast = floe,
+) where {FT<:AbstractFloat}
+    return MohrCoulombBondCriteria{FT}(floe, coast)
+end
+
+_bond_fractures(c::MohrCoulombBondCriteria, ::FloeBond, σn, τ) = _mohr_coulomb_fails(c.floe, σn, τ)
+_bond_fractures(c::MohrCoulombBondCriteria, ::CoastBond, σn, τ) = _mohr_coulomb_fails(c.coast, σn, τ)
+
+function Base.show(io::IO, c::MohrCoulombBondCriteria{FT}) where {FT}
+    env_summary(e) = "cohesion = $(e.cohesion), μ = $(e.μ), tensile_strength = $(e.tensile_strength)"
+    print(io, "MohrCoulombBondCriteria{$FT}\n",
+        "  ⊢ floe: ", env_summary(c.floe), "\n",
+        "  ⊢ coast: ", env_summary(c.coast))
+end
+
+"""
     FractureSettings{CT}
 
 Settings needed for fractures within the model. 
@@ -318,6 +469,11 @@ Settings needed for fractures within the model.
 - `Δt::Int`: determines how many simulation timesteps between attempting floe fracture (Default = 0)
 - `deform_on::Bool`: if true, then the floe will be deformed around floe primarily causing the fracture, identified by the largest overlap area on the most recent set of collisions (Default = False)
 - `npieces::Int`: how many pieces to try to split a fractured floe into (Default = 3)
+- `bond_criteria::AbstractBondFractureCriteria`: defines which bond fracture criteria (subtype of [`AbstractBondFractureCriteria`](@ref)) are used to determine which bonds break (Default = NoBondFracture()). Bond fracture requires bonds to be turned on in the simulation's `BondSettings`. Unlike floe fracture, it is checked every timestep, against bond stress accumulated as set in `BondSettings`.
+
+!!! note
+    Fracturing stays on if either `criteria` or `bond_criteria` is set, so floe fracture can
+    be turned off (`criteria = NoFracture()`) while bonds still break.
 
 ## _Keyword arguments_
 - Each of the above fields is an optional keyword argument.
@@ -332,6 +488,7 @@ FractureSettings{NoFracture}
   ⊢ Δt = 0
   ⊢ deform_on = false
   ⊢ npieces = 3
+  ⊢ bond_criteria = NoBondFracture
 ```
 
 - Creating a Float32 `FractureSettings` with fractures on
@@ -345,6 +502,7 @@ FractureSettings{MohrsCone{Float32}}
   ⊢ Δt = 0
   ⊢ deform_on = false
   ⊢ npieces = 3
+  ⊢ bond_criteria = NoBondFracture
 ```
 """
 @kwdef struct FractureSettings{CT<:AbstractFractureCriteria}
@@ -353,6 +511,7 @@ FractureSettings{MohrsCone{Float32}}
     Δt::Int = 0
     deform_on::Bool = false
     npieces::Int = 3
+    bond_criteria::AbstractBondFractureCriteria = NoBondFracture()
 
     function FractureSettings{CT}(
         fractures_on,
@@ -360,17 +519,18 @@ FractureSettings{MohrsCone{Float32}}
         Δt,
         deform_on,
         npieces,
+        bond_criteria = NoBondFracture(),
     ) where {CT <: AbstractFractureCriteria}
         if fractures_on
             if Δt < 0
                 @warn "Fracturing can't occur with negative timesteps. Turning \
                     fracturing off."
                 fractures_on = false
-            elseif criteria isa NoFracture
-                @warn "Fracturing can't occur on with NoFracture criteria. \
-                    Turning fracturing off."
+            elseif criteria isa NoFracture && bond_criteria isa NoBondFracture
+                @warn "Fracturing can't occur on with NoFracture criteria and \
+                    NoBondFracture bond criteria. Turning fracturing off."
                 fractures_on = false
-            elseif npieces < 2
+            elseif !(criteria isa NoFracture) && npieces < 2
                 @warn "Fracturing can't occur on with npieces < 2 as this \
                     won't split floe. Turning fracturing off."
                 fractures_on = false
@@ -381,7 +541,7 @@ FractureSettings{MohrsCone{Float32}}
                 deformation off."
             deform_on = false
         end
-        new{CT}(fractures_on, criteria, Δt, deform_on, npieces)
+        new{CT}(fractures_on, criteria, Δt, deform_on, npieces, bond_criteria)
     end
     FractureSettings(
         fractures_on,
@@ -389,6 +549,7 @@ FractureSettings{MohrsCone{Float32}}
         Δt,
         deform_on,
         npieces,
+        bond_criteria = NoBondFracture(),
     ) where {CT <: AbstractFractureCriteria} = 
         FractureSettings{CT}(
             fractures_on,
@@ -396,6 +557,7 @@ FractureSettings{MohrsCone{Float32}}
             Δt,
             deform_on,
             npieces,
+            bond_criteria,
         )
 end
 
@@ -404,7 +566,7 @@ function Base.show(io::IO, fracture_settings::FractureSettings{CT}) where {CT}
     overall_summary = "FractureSettings{$CT}"
     consts_summary = ""
     for name in fieldnames(FractureSettings)
-        if name == :criteria
+        if name == :criteria || name == :bond_criteria
             consts_summary *= "  ⊢" * " " * (string(name) * " = " * string(typeof(getfield(fracture_settings, name))) * "\n")
         else
             consts_summary *= "  ⊢" * " " * (string(name) * " = " * string(getfield(fracture_settings, name)) * "\n")

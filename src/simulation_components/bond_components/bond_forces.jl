@@ -26,3 +26,13 @@ function bond_damping_force(αi, ri, Ui, ωi, αj, rj, Uj, ωj, c)
     vj = Uj + ωj * perp(rot(αj, rj))
     return -c * (vi - vj)
 end
+
+# Split the force a bond exerts on its floe into a normal stress along the bond's face normal
+# (positive in tension, i.e. pulling the floe toward the bond's partner/the coast) and a shear
+# stress along the face. Shear is signed so that it has the same value seen from either floe
+# of a floe-floe bond. Stresses are force over cross-sectional area: face length L × thickness h.
+function bond_stress(F, α, normal_self, L, h)
+    n = rot(α, normal_self)
+    A = L * h
+    return dot(F, n) / A, cross2(n, F) / A
+end

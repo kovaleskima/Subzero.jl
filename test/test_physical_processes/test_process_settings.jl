@@ -120,8 +120,8 @@
         # Test warnings
         negΔt_str = "Fracturing can't occur with negative timesteps. Turning \
             fracturing off."
-        nocriteria_str = "Fracturing can't occur on with NoFracture criteria. \
-            Turning fracturing off."
+        nocriteria_str = "Fracturing can't occur on with NoFracture criteria and \
+            NoBondFracture bond criteria. Turning fracturing off."
         deform_str= "Deformation can't occur on without fracturing. Turning \
             deformation off."
         npiece_str = "Fracturing can't occur on with npieces < 2 as this won't \
@@ -153,6 +153,15 @@
             npieces = 1,
         )
         @test !small_npiece_info.fractures_on && !small_npiece_info.deform_on
+        # Test bond criteria alone keeps fracturing on, even with npieces < 2
+        bond_only_info = FractureSettings(
+            fractures_on = true,
+            bond_criteria = MohrCoulombBondCriteria(),
+            npieces = 1,
+        )
+        @test bond_only_info.fractures_on &&
+            bond_only_info.criteria isa NoFracture &&
+            bond_only_info.bond_criteria isa MohrCoulombBondCriteria
     end
 
     @testset "SimplificationSettings" begin

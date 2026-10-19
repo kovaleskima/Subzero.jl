@@ -120,6 +120,7 @@ function timestep_sim!(sim, tstep, start_tstep = 0)
         # Ridge and raft floes that meet overlap conditions
         if (
             sim.ridgeraft_settings.ridge_raft_on &&
+            !sim.bond_settings.bonds_on &&
             mod(tstep, sim.ridgeraft_settings.Δt) == 0
         )
             max_floe_id = timestep_ridging_rafting!(
@@ -197,7 +198,7 @@ function timestep_sim!(sim, tstep, start_tstep = 0)
         end
 
         # Weld floes
-        if sim.weld_settings.weld_on
+        if sim.weld_settings.weld_on && !sim.bond_settings.bonds_on
             weld_setting_idx = findfirst(
                 x -> mod(tstep, x) == 0,
                 sim.weld_settings.Δts
@@ -217,6 +218,7 @@ function timestep_sim!(sim, tstep, start_tstep = 0)
         end
 
         # What happens if floe tried to fuse with ghost floe?? 
+        # Bonds don't yet survive floes merging, so bonded floes aren't fused
         max_floe_id = 
             simplify_floes!(
                 sim.model,
@@ -225,7 +227,8 @@ function timestep_sim!(sim, tstep, start_tstep = 0)
                 sim.collision_settings,
                 sim.floe_settings,
                 sim.Δt,
-                sim.rng,
+                sim.rng;
+                fuse_on = !sim.bond_settings.bonds_on,
             )
     end
 
@@ -234,13 +237,25 @@ function timestep_sim!(sim, tstep, start_tstep = 0)
     return 
 end
 
-# Required actions to setup simulation. Right now, this only entails setting up the simulation's logger.
+# Required actions to setup simulation: setting up the simulation's logger and, if bonds are on,
+# bonding adjacent floes.
 function startup_sim(sim, logger = nothing; messages_per_tstep = 1)
     # Set up logger if needed
     if isnothing(logger)
         logger = SubzeroLogger(; sim, messages_per_tstep)
     end
     global_logger(logger)
+    if sim.bond_settings.bonds_on
+        # Bonds don't yet survive floes merging, so floes aren't fused, ridged, or welded
+        sim.ridgeraft_settings.ridge_raft_on &&
+            @warn "Ridging and rafting don't occur when bonds are on."
+        sim.weld_settings.weld_on && @warn "Welding doesn't occur when bonds are on."
+        # Bond floes along their shared faces, unless floe-floe bonds were already added
+        if all(b -> isempty(b.floe), sim.model.floes.bonds)
+            nbonds = bond_adjacent_floes!(sim.model.floes, sim.model.domain)
+            sim.verbose && println("Bonded $nbonds pairs of adjacent floes.")
+        end
+    end
     # Start sim notice
     sim.verbose && println(sim.name * " is running!")
     return

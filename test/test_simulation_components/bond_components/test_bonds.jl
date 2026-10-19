@@ -113,3 +113,62 @@ end
     @test floes.bonds[1].fx > 0 && floes.bonds[2].fx < 0
     @test floes.bonds[3].fx < 0                              # pulled back toward the wall
 end
+
+@testset "bond_adjacent_floes!" begin
+    using Subzero: bond_adjacent_floes!
+    rect(x0, y0, w, h) = [[[x0, y0], [x0, y0 + h], [x0 + w, y0 + h], [x0 + w, y0], [x0, y0]]]
+    floes_from(coords) = StructArray([Floe{Float64}(c, 1.0; id = k) for (k, c) in enumerate(coords)])
+    ext = (; x0 = 0.0, xf = 100.0, y0 = 0.0, yf = 100.0)
+    collision_domain = Subzero.Domain(;
+        north = CollisionBoundary(North; ext...), south = CollisionBoundary(South; ext...),
+        east = CollisionBoundary(East; ext...), west = CollisionBoundary(West; ext...),
+    )
+    periodic_domain = Subzero.Domain(;
+        north = CollisionBoundary(North; ext...), south = CollisionBoundary(South; ext...),
+        east = PeriodicBoundary(East; ext...), west = PeriodicBoundary(West; ext...),
+    )
+
+    @testset "shared face is bonded at its midpoint" begin
+        floes = floes_from([rect(10, 10, 10, 5), rect(20, 10, 10, 5)])
+        @test bond_adjacent_floes!(floes, collision_domain) == 1
+        b = floes.bonds[1].floe[1]
+        @test b.partner_id == 2 && b.L ≈ 5
+        @test b.attach_self ≈ SVector(5.0, 0.0) && b.attach_partner ≈ SVector(-5.0, 0.0)
+        @test b.normal_self ≈ SVector(1.0, 0.0)
+        @test bonds_symmetric(floes)
+    end
+
+    @testset "bond length is the overlap of partially shared faces" begin
+        floes = floes_from([rect(10, 10, 10, 10), rect(20, 15, 10, 10)])
+        @test bond_adjacent_floes!(floes, collision_domain) == 1
+        b = floes.bonds[1].floe[1]
+        @test b.L ≈ 5
+        @test SVector(floes.centroid[1]...) + b.attach_self ≈ SVector(20.0, 17.5)
+    end
+
+    @testset "floes touching at a corner or apart aren't bonded" begin
+        floes = floes_from([rect(10, 10, 10, 10), rect(20, 20, 10, 10), rect(50, 50, 10, 10)])
+        @test bond_adjacent_floes!(floes, collision_domain) == 0
+        @test all(isempty, floes.bonds)
+    end
+
+    @testset "grid of floes and existing bonds" begin
+        floes = floes_from([rect(10i, 10j, 10, 10) for i in 1:3 for j in 1:3])
+        @test bond_adjacent_floes!(floes, collision_domain) == 12
+        @test bonds_symmetric(floes)
+        # running again doesn't duplicate bonds
+        @test bond_adjacent_floes!(floes, collision_domain) == 0
+    end
+
+    @testset "faces shared across periodic boundaries" begin
+        floes = floes_from([rect(0, 10, 10, 10), rect(90, 10, 10, 10)])
+        @test bond_adjacent_floes!(floes, collision_domain) == 0
+        @test bond_adjacent_floes!(floes, periodic_domain) == 1
+        b = floes.bonds[1].floe[1]
+        @test b.L ≈ 10 && b.normal_self ≈ SVector(-1.0, 0.0)
+        # partner anchor sits on the face shared with floe 1, at the partner's periodic image
+        @test SVector(floes.centroid[1]...) + b.attach_self ≈ SVector(0.0, 15.0)
+        @test SVector(floes.centroid[2]...) + SVector(-100.0, 0.0) + b.attach_partner ≈ SVector(0.0, 15.0)
+        @test bonds_symmetric(floes)
+    end
+end

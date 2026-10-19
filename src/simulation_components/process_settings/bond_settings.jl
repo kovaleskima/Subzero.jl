@@ -6,7 +6,10 @@ export BondSettings
 Settings needed for bonds between floes.
 
 ## _Fields_ / _Keyword Arguments_
-- `bonds_on::Bool`: if true, bonded floes are held together by springs (Default = false)
+- `bonds_on::Bool`: if true, bonded floes are held together by springs. When the simulation
+    starts, every pair of floes sharing a face is bonded along that face, unless floe-floe
+    bonds were already added by hand with `add_bond!`. Floes are not fused, ridged, rafted,
+    or welded when bonds are on. (Default = false)
 - `coastline_bonds::Bool`: if true, bonds between floes and the coast/topography (added with
     `add_coast_bond!`) apply forces; if false, they are ignored and only floe-floe bonds act.
     Requires `bonds_on`. (Default = false)

@@ -304,7 +304,8 @@ function simplify_floes!(
     collision_settings,
     floe_settings,
     Δt,
-    rng,
+    rng;
+    fuse_on = true,
 )
     # Smooth coordinates to reduce total number of vertices
     if simp_settings.smooth_vertices_on
@@ -319,13 +320,15 @@ function simplify_floes!(
         )
     end
     # Fuse floes that have been marked for fusion
-    max_floe_id = fuse_floes!(
-        model.floes,
-        max_floe_id,
-        floe_settings,
-        Δt,
-        rng,
-    )
+    if fuse_on
+        max_floe_id = fuse_floes!(
+            model.floes,
+            max_floe_id,
+            floe_settings,
+            Δt,
+            rng,
+        )
+    end
 
     # Remove floes marked for removal and dissolving
     remove_floes!(

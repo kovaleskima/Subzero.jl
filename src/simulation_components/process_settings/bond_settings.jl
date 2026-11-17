@@ -13,8 +13,13 @@ Settings needed for bonds between floes.
 - `coastline_bonds::Bool`: if true, bonds between floes and the coast/topography (added with
     `add_coast_bond!`) apply forces; if false, they are ignored and only floe-floe bonds act.
     Requires `bonds_on`. (Default = false)
-- `stiffness_ratio::FT`: bond stiffness is the contact stiffness divided by this ratio (Default = 25)
-- `damping_ratio::FT`: fraction of critical damping applied to each bond (Default = 0.1)
+- `normal_stiffness_ratio::FT`: stiffness of a bond against motion perpendicular to its face
+    (tension and compression) is the contact stiffness divided by this ratio
+    (Default = `stiffness_ratio`)
+- `shear_stiffness_ratio::FT`: stiffness of a bond against motion parallel to its face (shear)
+    is the contact stiffness divided by this ratio (Default = `stiffness_ratio`)
+- `damping_ratio::FT`: fraction of critical damping applied to each bond, separately for its
+    normal and shear motion (Default = 0.1)
 - `stress_nhistory::Int`: number of most recent timesteps of bond stress that are accumulated
     when checking bond fracture (Default = 10)
 - `stress_decay::FT`: decay rate of the exponential weighting of accumulated bond stress. The
@@ -24,23 +29,26 @@ Settings needed for bonds between floes.
     `stress_nhistory` timesteps of sustained stress to reach its full accumulated stress.
     (Default = 0.2, so the oldest timestep has ~1/6 the weight of the newest)
 
-Construct with `BondSettings([FT = Float64]; kwargs...)`.
+Construct with `BondSettings([FT = Float64]; kwargs...)`. The keyword `stiffness_ratio`
+(Default = 25) sets both `normal_stiffness_ratio` and `shear_stiffness_ratio` unless they are
+given, so `BondSettings(; stiffness_ratio = 100)` gives an isotropic bond.
 """
 struct BondSettings{FT<:AbstractFloat}
     bonds_on::Bool
     coastline_bonds::Bool
-    stiffness_ratio::FT
+    normal_stiffness_ratio::FT
+    shear_stiffness_ratio::FT
     damping_ratio::FT
     stress_nhistory::Int
     stress_decay::FT
 
     function BondSettings{FT}(
-        bonds_on, coastline_bonds, stiffness_ratio, damping_ratio,
-        stress_nhistory = 10, stress_decay = 0.2,
+        bonds_on, coastline_bonds, normal_stiffness_ratio, shear_stiffness_ratio,
+        damping_ratio, stress_nhistory = 10, stress_decay = 0.2,
     ) where {FT<:AbstractFloat}
         if bonds_on
-            if stiffness_ratio <= 0
-                @warn "Bond stiffness ratio must be positive. Turning bonds off."
+            if normal_stiffness_ratio <= 0 || shear_stiffness_ratio <= 0
+                @warn "Bond stiffness ratios must be positive. Turning bonds off."
                 bonds_on = false
             elseif damping_ratio < 0
                 @warn "Bond damping ratio can't be negative. Turning bonds off."
@@ -61,17 +69,19 @@ struct BondSettings{FT<:AbstractFloat}
             @warn "Coastline bonds can't be on without bonds. Turning coastline bonds off."
             coastline_bonds = false
         end
-        new{FT}(bonds_on, coastline_bonds, stiffness_ratio, damping_ratio,
-            stress_nhistory, stress_decay)
+        new{FT}(bonds_on, coastline_bonds, normal_stiffness_ratio, shear_stiffness_ratio,
+            damping_ratio, stress_nhistory, stress_decay)
     end
 end
 
 function BondSettings(::Type{FT} = Float64;
     bonds_on = false, coastline_bonds = false,
-    stiffness_ratio = 25, damping_ratio = 0.1, stress_nhistory = 10, stress_decay = 0.2,
+    stiffness_ratio = 25, normal_stiffness_ratio = stiffness_ratio,
+    shear_stiffness_ratio = stiffness_ratio, damping_ratio = 0.1, stress_nhistory = 10,
+    stress_decay = 0.2,
 ) where {FT<:AbstractFloat}
-    return BondSettings{FT}(bonds_on, coastline_bonds, FT(stiffness_ratio), FT(damping_ratio),
-        stress_nhistory, FT(stress_decay))
+    return BondSettings{FT}(bonds_on, coastline_bonds, FT(normal_stiffness_ratio),
+        FT(shear_stiffness_ratio), FT(damping_ratio), stress_nhistory, FT(stress_decay))
 end
 
 function Base.show(io::IO, bs::BondSettings{FT}) where {FT}

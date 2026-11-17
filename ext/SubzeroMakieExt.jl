@@ -44,6 +44,13 @@ function plot_sim(
     time = Observable(timesteps[1])  # note these are strings as we index into a JLD2 file
     time_polys = @lift(sim_polys[$time])
     title_string = @lift(Subzero.prettytime(parse(Float64, $time) * Δt))
+    # Bond Information (only if bonds were output)
+    plot_bonds = all(k -> haskey(file, k), ("bonds", "centroid", "α", "id", "ghost_id"))
+    if plot_bonds
+        unbroken_pts, broken_pts = bond_points(file, timesteps)
+        time_unbroken = @lift(unbroken_pts[$time])
+        time_broken = @lift(broken_pts[$time])
+    end
 
     #=
     Note that if you had Nx by Ny by time ocean data, this would be a good place to connect
@@ -65,10 +72,14 @@ function plot_sim(
     )
 
     # Plot starting state (floes + topography)
-    poly!(time_polys, color = floe_color, strokecolor = :black, strokewidth = 0.5)  # floes
+    poly!(time_polys, color = floe_color, strokecolor = floe_color, strokewidth = 0.5)  # floes
     if !isempty(domain.topography)  # topography
         topo_mp = domain.topography.poly
         poly!(topo_mp, color = topo_color)
+    end
+    if plot_bonds  # unbroken bonds as red dots, broken bonds as blue x's
+        scatter!(time_unbroken, color = :red, marker = :circle, markersize = 4)
+        scatter!(time_broken, color = :blue, marker = :xcross, markersize = 7)
     end
 
     #=
@@ -88,6 +99,53 @@ function plot_sim(
 
     # End movie and close file
     close(file)
+end
+
+# world-frame location of a bond anchor given the floe's centroid, rotation, and body-frame
+# attachment vector
+_bond_world(c, α, a) = Point2f(c[1] + cos(α) * a[1] - sin(α) * a[2],
+    c[2] + sin(α) * a[1] + cos(α) * a[2])
+
+#=
+For each output timestep, find the locations of unbroken and broken bonds. A bond is broken
+at a timestep if it existed at an earlier timestep but no longer does. Broken bonds keep
+moving with the floe they were attached to; if that floe no longer exists, they stay at
+their last location.
+=#
+function bond_points(file, timesteps)
+    unbroken = Dict{String, Vector{Point2f}}()
+    broken = Dict{String, Vector{Point2f}}()
+    # bond key => (floe id, body-frame attachment, last world location)
+    seen = Dict{Any, Tuple{Int, Any, Point2f}}()
+    for t in timesteps
+        ids, ghost_ids = file["id"][t], file["ghost_id"][t]
+        centroids, αs, bonds = file["centroid"][t], file["α"][t], file["bonds"][t]
+        idx = Dict(ids[i] => i for i in eachindex(ids) if ghost_ids[i] == 0)
+        alive = Set{Any}()
+        unbroken[t] = Point2f[]
+        for (id, i) in idx
+            for b in bonds[i].floe
+                id < b.partner_id || continue  # each floe-floe bond is stored on both floes
+                key = (id, b.partner_id)
+                p = _bond_world(centroids[i], αs[i], b.attach_self)
+                push!(alive, key); push!(unbroken[t], p)
+                seen[key] = (id, b.attach_self, p)
+            end
+            for b in bonds[i].coast
+                key = (id, Tuple(b.anchor))
+                p = Point2f(b.anchor[1], b.anchor[2])
+                push!(alive, key); push!(unbroken[t], p)
+                seen[key] = (id, nothing, p)
+            end
+        end
+        broken[t] = Point2f[]
+        for (key, (id, a, p)) in seen
+            key in alive && continue
+            i = get(idx, id, 0)
+            push!(broken[t], (i == 0 || isnothing(a)) ? p : _bond_world(centroids[i], αs[i], a))
+        end
+    end
+    return unbroken, broken
 end
 
 end  # module

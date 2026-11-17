@@ -5,12 +5,14 @@ struct FloeBond{FT<:AbstractFloat}
     attach_self::SA.SVector{2,FT}      # vector from floe centroid to bond anchor on the floe face 
     attach_partner::SA.SVector{2,FT}   # same thing but for partner floe
     normal_self::SA.SVector{2,FT}      # this floe's unit outward face normal, body frame
+    normal_partner::SA.SVector{2,FT}   # same thing but for partner floe
     L::FT                              # length of shared face
     stress_history::Vector{SA.SVector{2,FT}}  # (σn, τ) of recent timesteps, newest first
 end
 
-FloeBond{FT}(partner_id, attach_self, attach_partner, normal_self, L) where {FT} =
-    FloeBond{FT}(partner_id, attach_self, attach_partner, normal_self, L, SA.SVector{2,FT}[])
+FloeBond{FT}(partner_id, attach_self, attach_partner, normal_self, normal_partner, L) where {FT} =
+    FloeBond{FT}(partner_id, attach_self, attach_partner, normal_self, normal_partner, L,
+        SA.SVector{2,FT}[])
 
 # bond to the coast: fixed anchor, no partner floe
 struct CoastBond{FT<:AbstractFloat}

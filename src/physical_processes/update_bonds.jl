@@ -7,13 +7,22 @@ function _floe_bond_force(floes, i, j, b, xi, Ui, Lx, Ly, consts, bs)
     Uj = SA.SVector{2,FT}(floes.u[j], floes.v[j])
     ih, jh = floes.height[i], floes.height[j]
     ir, jr = sqrt(floes.area[i]), sqrt(floes.area[j])
-    k = consts.E * (ih*jh) / (ih*jr + jh*ir) / bs.stiffness_ratio
-    F, τ, _ = bond_force(xi, floes.α[i], b.attach_self, xj, floes.α[j], b.attach_partner, k, b.L)
+    k = consts.E * (ih*jh) / (ih*jr + jh*ir)
+    kn, ks = k / bs.normal_stiffness_ratio, k / bs.shear_stiffness_ratio
+    αi, αj = floes.α[i], floes.α[j]
+    F, τ, _ = bond_force(xi, αi, b.attach_self, b.normal_self, xj, αj, b.attach_partner,
+                         b.normal_partner, kn, ks, b.L)
     mi, mj = floes.mass[i], floes.mass[j]
-    c = 2 * bs.damping_ratio * sqrt(k * b.L * mi*mj/(mi + mj))
-    Fd = bond_damping_force(floes.α[i], b.attach_self, Ui, floes.ξ[i],
-                            floes.α[j], b.attach_partner, Uj, floes.ξ[j], c)
-    τd = cross2(rot(floes.α[i], b.attach_self), Fd)
+    μ = mi*mj/(mi + mj)
+    cn = 2 * bs.damping_ratio * sqrt(kn * b.L * μ)
+    cs = 2 * bs.damping_ratio * sqrt(ks * b.L * μ)
+    Fd = bond_damping_force(αi, b.attach_self, Ui, floes.ξ[i], αj, b.attach_partner, Uj,
+                            floes.ξ[j], bond_normal(αi, b.normal_self, αj, b.normal_partner),
+                            cn, cs)
+    # damping acts at the bond's midpoint too, like the spring force (see bond_force)
+    pi = xi + rot(αi, b.attach_self)
+    pj = xj + rot(αj, b.attach_partner)
+    τd = cross2((pi + pj) / 2 - xi, Fd)
     return F + Fd, τ + τd
 end
 
@@ -21,11 +30,14 @@ end
 # floe i's centroid; the coast is rigid, so stiffness matches floe-topography collisions and
 # damping uses the floe's full mass
 function _coast_bond_force(floes, i, b, xi, Ui, consts, bs)
-    k = consts.E * floes.height[i] / sqrt(floes.area[i]) / bs.stiffness_ratio
-    F, τ = fixed_bond_force(xi, floes.α[i], b.attach_self, b.anchor, k, b.L)
-    c = 2 * bs.damping_ratio * sqrt(k * b.L * floes.mass[i])
-    offi = rot(floes.α[i], b.attach_self)
-    Fd = -c * (Ui + floes.ξ[i] * perp(offi))
+    k = consts.E * floes.height[i] / sqrt(floes.area[i])
+    kn, ks = k / bs.normal_stiffness_ratio, k / bs.shear_stiffness_ratio
+    α = floes.α[i]
+    F, τ = fixed_bond_force(xi, α, b.attach_self, b.normal_self, b.anchor, kn, ks, b.L)
+    cn = 2 * bs.damping_ratio * sqrt(kn * b.L * floes.mass[i])
+    cs = 2 * bs.damping_ratio * sqrt(ks * b.L * floes.mass[i])
+    offi = rot(α, b.attach_self)
+    Fd = -split_scale(Ui + floes.ξ[i] * perp(offi), rot(α, b.normal_self), cn, cs)
     return F + Fd, τ + cross2(offi, Fd)
 end
 

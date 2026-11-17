@@ -41,8 +41,8 @@ using Subzero: add_bond!, add_coast_bond!, bonds_symmetric
         return StructArray([A, B, C])
     end
     # with no velocities there is no damping, so σ = k L δ / (L h) = k δ
-    k_floe = consts.E / (2sqrt(50.0)) / bs.stiffness_ratio
-    k_coast = consts.E / sqrt(50.0) / bs.stiffness_ratio
+    k_floe = consts.E / (2sqrt(50.0)) / bs.normal_stiffness_ratio
+    k_coast = consts.E / sqrt(50.0) / bs.normal_stiffness_ratio
     δ = 0.01
 
     @testset "bond stress" begin
@@ -73,6 +73,40 @@ using Subzero: add_bond!, add_coast_bond!, bonds_symmetric
         @test τ ≈ 0 atol = 1e-8
     end
 
+    @testset "separate normal and shear stiffness" begin
+        bs_aniso = BondSettings(; bonds_on = true, coastline_bonds = true,
+            normal_stiffness_ratio = 10, shear_stiffness_ratio = 40)
+        @test bs_aniso.normal_stiffness_ratio == 10 && bs_aniso.shear_stiffness_ratio == 40
+        k0 = consts.E / (2sqrt(50.0))
+        stress(floes, i, b, bs) = Subzero.bond_stress(
+            Subzero._floe_bond_force(floes, i, i == 1 ? 2 : 1, b, SVector(floes.centroid[i]...),
+                SVector(0.0, 0.0), Inf, Inf, consts, bs)[1],
+            floes.α[i], b.normal_self, b.L, 1.0)
+        # pulled apart -> tension with the normal stiffness
+        floes = bonded_floes(; δB = SVector(δ, 0.0))
+        @test stress(floes, 1, floes.bonds[1].floe[1], bs_aniso)[1] ≈ k0 / 10 * δ
+        # sliding along the face -> shear with the shear stiffness
+        floes = bonded_floes(; δB = SVector(0.0, δ))
+        @test abs(stress(floes, 1, floes.bonds[1].floe[1], bs_aniso)[2]) ≈ k0 / 40 * δ
+        # both at once: each part uses its own stiffness, and the partner sees the same stress
+        floes = bonded_floes(; δB = SVector(δ, 2δ))
+        σn, τ = stress(floes, 1, floes.bonds[1].floe[1], bs_aniso)
+        @test σn ≈ k0 / 10 * δ && abs(τ) ≈ k0 / 40 * 2δ
+        @test all(stress(floes, 2, floes.bonds[2].floe[1], bs_aniso) .≈ (σn, τ))
+        # coast bond sliding along the wall -> shear with the shear stiffness
+        floes = bonded_floes(; δC = SVector(0.0, δ))
+        cb = floes.bonds[3].coast[1]
+        F, _ = Subzero._coast_bond_force(floes, 3, cb, SVector(floes.centroid[3]...),
+            SVector(0.0, 0.0), consts, bs_aniso)
+        σn, τ = Subzero.bond_stress(F, floes.α[3], cb.normal_self, cb.L, 1.0)
+        @test σn ≈ 0 atol = 1e-8
+        @test abs(τ) ≈ consts.E / sqrt(50.0) / 40 * δ
+        # stiffness_ratio sets both, and non-positive ratios turn bonds off
+        bs_iso = BondSettings(; stiffness_ratio = 100)
+        @test bs_iso.normal_stiffness_ratio == bs_iso.shear_stiffness_ratio == 100
+        @test !(@test_logs (:warn,) BondSettings(; bonds_on = true, shear_stiffness_ratio = 0)).bonds_on
+    end
+
     @testset "stress accumulation" begin
         floes = bonded_floes(; δB = SVector(δ, 0.0))
         b = floes.bonds[1].floe[1]
@@ -94,7 +128,8 @@ using Subzero: add_bond!, add_coast_bond!, bonds_symmetric
         @test acc(b, bs)[1] ≈ k_floe * δ
         # recent timesteps get more weight: newest is double -> pulled above the plain mean
         hist = pushfirst!(fill(SVector(1.0, 1.0), 9), SVector(2.0, -1.0))
-        b_hist = Subzero.FloeBond{Float64}(2, b.attach_self, b.attach_partner, b.normal_self, b.L, hist)
+        b_hist = Subzero.FloeBond{Float64}(2, b.attach_self, b.attach_partner, b.normal_self,
+            b.normal_partner, b.L, hist)
         weights = [r^k for k in 0:9]
         @test acc(b_hist, bs)[1] ≈ sum(weights .* first.(hist)) / wsum
         @test acc(b_hist, bs)[1] > 1.1

@@ -172,3 +172,47 @@ end
         @test bonds_symmetric(floes)
     end
 end
+
+@testset "bond_floes_to_coast!" begin
+    using Subzero: bond_floes_to_coast!
+    rect(x0, y0, w, h) = [[[x0, y0], [x0, y0 + h], [x0 + w, y0 + h], [x0 + w, y0], [x0, y0]]]
+    floes_from(coords) = StructArray([Floe{Float64}(c, 1.0; id = k) for (k, c) in enumerate(coords)])
+    ext = (; x0 = 0.0, xf = 100.0, y0 = 0.0, yf = 100.0)
+    bounds = (;
+        north = CollisionBoundary(North; ext...), south = CollisionBoundary(South; ext...),
+        east = CollisionBoundary(East; ext...), west = CollisionBoundary(West; ext...),
+    )
+    # wall whose right face is at x = 10
+    domain = Subzero.Domain(; bounds...,
+        topography = initialize_topography_field(; coords = [rect(0, 0, 10, 100)]))
+
+    @testset "face touching the coast is bonded at its midpoint" begin
+        floes = floes_from([rect(10, 10, 10, 5)])
+        @test bond_floes_to_coast!(floes, domain) == 1
+        b = only(floes.bonds[1].coast)
+        @test b.anchor ≈ SVector(10.0, 12.5) && b.L ≈ 5
+        @test b.normal_self ≈ SVector(-1.0, 0.0)
+        # running again doesn't duplicate bonds
+        @test bond_floes_to_coast!(floes, domain) == 0
+    end
+
+    @testset "faces within max_gap of the coast are bonded" begin
+        floes = floes_from([rect(12, 10, 10, 5)])
+        @test bond_floes_to_coast!(floes, domain) == 0
+        @test bond_floes_to_coast!(floes, domain; max_gap = 3.0) == 1
+        @test only(floes.bonds[1].coast).anchor ≈ SVector(12.0, 12.5)
+    end
+
+    @testset "faces shared with or shielded by other floes aren't bonded" begin
+        # floe 1 touches the coast, floe 2 is beside it, floe 3 sits behind floe 1
+        floes = floes_from([rect(10, 10, 2, 5), rect(10, 15, 2, 5), rect(12, 10, 2, 5)])
+        @test bond_floes_to_coast!(floes, domain; max_gap = 5.0) == 2
+        @test length(floes.bonds[1].coast) == 1 && length(floes.bonds[2].coast) == 1
+        @test isempty(floes.bonds[3].coast)
+    end
+
+    @testset "no topography, no bonds" begin
+        floes = floes_from([rect(10, 10, 10, 5)])
+        @test bond_floes_to_coast!(floes, Subzero.Domain(; bounds...)) == 0
+    end
+end

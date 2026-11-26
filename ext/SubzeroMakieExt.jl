@@ -5,7 +5,7 @@ using Subzero, JLD2
 import Subzero: prettytime, plot_sim
 
 """
-    plot_sim(floe_fn, initial_state_fn, Δt, output_fn; max_side_pixels = 800)
+    plot_sim(floe_fn, initial_state_fn, Δt, output_fn; background = nothing)
 
 Basic plotting of a simulation using the simulation's floe and initial state files. This
 function is meant for basic plotting during testing and as an example of how to create
@@ -20,12 +20,18 @@ heatmap and colorbar.
 - `initial_state_fn::String`: $(Subzero.INITIAL_STATE_FN_DEF)
 - $(Subzero.ΔT_DEF)
 - `output_fn::String`: $(Subzero.MP4_OUTPUT_FN)
+
+## Keyword arguments:
+- `background`: an image (matrix of colors, first row at the top) covering the domain from
+    its west to east and south to north walls, drawn under the floes in place of the
+    topography, e.g. a satellite image of the region.
 """
 function plot_sim(
     floe_fn,
     initial_state_fn,
     Δt,
-    output_fn
+    output_fn;
+    background = nothing,
 )
     # Color Information
     topo_color = RGBf(147/255, 129/255, 102/255)
@@ -71,15 +77,18 @@ function plot_sim(
         yticklabelrotation = pi/4,
     )
 
-    # Plot starting state (floes + topography)
+    # Plot starting state (background + floes + topography)
+    if !isnothing(background)  # image rows run top to bottom, Makie's x index runs west to east
+        image!((xmin, xmax), (ymin, ymax), rotr90(background))
+    end
     poly!(time_polys, color = floe_color, strokecolor = floe_color, strokewidth = 0.5)  # floes
-    if !isempty(domain.topography)  # topography
+    if !isempty(domain.topography) && isnothing(background)  # topography
         topo_mp = domain.topography.poly
         poly!(topo_mp, color = topo_color)
     end
     if plot_bonds  # unbroken bonds as red dots, broken bonds as blue x's
-        scatter!(time_unbroken, color = :red, marker = :circle, markersize = 4)
-        scatter!(time_broken, color = :blue, marker = :xcross, markersize = 7)
+        scatter!(time_unbroken, color = :red, marker = :circle, markersize = 2)
+        scatter!(time_broken, color = :blue, marker = :xcross, markersize = 3)
     end
 
     #=

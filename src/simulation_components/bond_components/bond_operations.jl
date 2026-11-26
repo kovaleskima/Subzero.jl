@@ -124,3 +124,71 @@ function bond_adjacent_floes!(floes::StructArray{<:Floe{FT}}, domain;
     end
     return nadded
 end
+
+# distance s ≥ -tol along the ray m + s * n to its first crossing of an edge of ring r,
+# skipping edge `skip`; Inf if the ray doesn't cross r
+function _ray_hit(m, n, r, tol; skip = 0)
+    hit = oftype(tol, Inf)
+    for k in 1:length(r)-1
+        k == skip && continue
+        c, w = r[k], r[k+1] - r[k]
+        denom = cross2(n, w)
+        abs(denom) ≤ eps(norm(w)) && continue      # ray parallel to edge
+        s = cross2(c - m, w) / denom
+        u = cross2(c - m, n) / denom
+        (-tol ≤ s < hit && 0 ≤ u ≤ 1) && (hit = s)
+    end
+    return hit
+end
+
+"""
+    bond_floes_to_coast!(floes, domain; max_gap, tol)
+
+Bond floes to the coast (the domain's topography) along every face that touches it. A face
+touches the coast if the coast is within `max_gap` (m) of the face's midpoint, looking out
+from the face along its outward normal, with no other floe in between, so faces shared
+with other floes and faces with another floe between them and the coast aren't bonded.
+`max_gap` allows for gaps between the floe field and the coastline, e.g. when they were
+outlined from different data. Each face gets its own coast bond, anchored at the face's
+midpoint, with the face's length as its length. Faces already bonded are skipped. Faces
+must be longer than `tol` (m). Returns the number of bonds added.
+"""
+function bond_floes_to_coast!(floes::StructArray{<:Floe{FT}}, domain;
+    max_gap = zero(FT),
+    tol = FT(1e-6) * (domain.east.val - domain.west.val),
+) where {FT}
+    isempty(domain.topography) && return 0
+    coast = [_ccw_ring(p, FT) for p in domain.topography.poly]
+    rings = [_ccw_ring(p, FT) for p in floes.poly]
+    lo = [reduce((u, v) -> min.(u, v), r) for r in rings]
+    hi = [reduce((u, v) -> max.(u, v), r) for r in rings]
+    reach = max_gap + tol
+    nadded = 0
+    for i in eachindex(floes)
+        floes.ghost_id[i] == 0 || continue
+        ri = rings[i]
+        for k in 1:length(ri)-1
+            a, b = ri[k], ri[k+1]
+            ℓ = norm(b - a)
+            ℓ ≤ tol && continue
+            t = (b - a) / ℓ
+            n = SA.SVector(t[2], -t[1])     # outward normal of a counterclockwise ring
+            m = (a + b) / 2
+            any(cb -> cb.anchor ≈ m, floes.bonds[i].coast) && continue
+            dcoast = minimum(c -> _ray_hit(m, n, c, tol), coast)
+            dcoast ≤ reach || continue
+            # bounding box of the ray segment from the face to the coast
+            e = m + n * dcoast
+            rlo, rhi = min.(m, e) .- tol, max.(m, e) .+ tol
+            blocked = any(eachindex(floes)) do j
+                floes.ghost_id[j] == 0 || return false
+                (all(lo[j] .≤ rhi) && all(rlo .≤ hi[j])) || return false
+                _ray_hit(m, n, rings[j], tol; skip = j == i ? k : 0) ≤ dcoast
+            end
+            blocked && continue
+            add_coast_bond!(floes[i], m, n, ℓ)
+            nadded += 1
+        end
+    end
+    return nadded
+end

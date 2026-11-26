@@ -28,7 +28,7 @@ into the extension.
 
 # Stub functions that depend on CairoMakie implemented in ext/SubzeroMakieExt.jl
 """
-    plot_sim(floe_fn, initial_state_fn, Δt, output_fn; max_side_pixels = 800)
+    plot_sim(floe_fn, initial_state_fn, Δt, output_fn; background = nothing)
 
 Basic plotting of a simulation using the simulation's floe and initial state files. This
 function is meant for basic plotting during testing and as an example of how to create
@@ -43,6 +43,11 @@ heatmap and colorbar within the source code.
 - `initial_state_fn::String`: $INITIAL_STATE_FN_DEF
 - $ΔT_DEF
 - `output_fn::String`: $MP4_OUTPUT_FN
+
+## Keyword arguments:
+- `background`: an image (matrix of colors, first row at the top) covering the domain from
+    its west to east and south to north walls, drawn under the floes in place of the
+    topography, e.g. a satellite image of the region.
 """
 function plot_sim end
 
